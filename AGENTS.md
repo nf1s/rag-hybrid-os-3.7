@@ -16,7 +16,8 @@ api/                  # Python RAG API (FastAPI + Pydantic AI agent)
   app/models.py       # Pydantic request/response models (ChatRequest, ChatResponse, Source, ...)
   app/settings.py     # Env-driven settings (OPENSEARCH_URL, LLM_URL, LLM_MODEL)
   start.sh            # Starts llama-cpp-python server (bg), then uvicorn
-  requirements.txt
+  pyproject.toml
+  uv.lock
 frontend/             # Nginx + single-file chat UI (index.html, vanilla JS)
 template-job/         # Applies the `article` index template (basic text mapping)
 model-job/            # Registers + deploys all-MiniLM-L12-v2, upgrades template to `semantic` field,
