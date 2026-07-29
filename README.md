@@ -1,34 +1,38 @@
 # RAG on OpenSearch Hybrid Search
 
-Retrieval-Augmented Generation on top of **OpenSearch 3.7** hybrid search (semantic + full-text). Uses a **Pydantic AI** agent with **Ollama** (local LLM) to generate answers from retrieved article chunks.
+Retrieval-Augmented Generation on top of **OpenSearch 3.7** hybrid search (semantic + full-text). Uses a **Pydantic AI** agent with a **llama-cpp-python** inference server (running in-container, no external LLM) to generate answers from retrieved article chunks.
 
 ## Architecture
 
 ```
-                   ┌──────────────────┐
-                   │   UI (Nginx)     │  single-page search app
-                   │  :80             │  4 modes: FT / Semantic / Hybrid / **RAG**
-                   └────────┬─────────┘
-                            │ /api/os/ → OpenSearch    /api/rag/ → RAG API
-                   ┌────────▼─────────┐   ┌──────────────▼──────────────┐
-                   │  OpenSearch 3.7  │   │  RAG API (Pydantic AI)     │
-                   │  hybrid-search   │   │  FastAPI + Ollama          │
-                   │  security: off   │   │  :8000                     │
-                   └────────┬─────────┘   └──────────────┬──────────────┘
-                            │                             │ Ollama (host)
-                   ┌────────▼─────────┐           ┌───────▼────────┐
-                   │  all-MiniLM-L12  │           │  llama3.2 /    │
-                   │  embeddings      │           │  mistral, etc. │
-                   └──────────────────┘           └────────────────┘
-                                        │
-          ┌─────────────────────────────┼─────────────────────────────┐
-          ▼                             ▼                             ▼
-   ┌────────────┐               ┌────────────┐               ┌──────────────────┐
-   │ template-  │               │  model-    │               │    seed-job      │
-   │ job        │               │  job       │               │  30 articles     │
-   │ index      │               │  ML model  │               │                  │
-   │ template   │               │  pipelines │               │                  │
-   └────────────┘               └────────────┘               └──────────────────┘
+                    ┌──────────────────┐
+                    │   UI (Nginx)     │  single-page chat app
+                    │  :80             │  SSE streaming
+                    └────────┬─────────┘
+                             │ /api/rag/ → RAG API
+                    ┌────────▼──────────────────────────┐
+                    │  RAG API (Pydantic AI agent)      │
+                    │  FastAPI  :8000                    │
+                    │  ┌─────────────────────────────┐  │
+                    │  │ llama-cpp-python (bg proc)   │  │
+                    │  │ Qwen2.5-1.5B GGUF :8001     │  │
+                    │  └─────────────────────────────┘  │
+                    └────────┬──────────────────────────┘
+                             │ hybrid search
+                    ┌────────▼──────────────────────────┐
+                    │  OpenSearch 3.7                    │
+                    │  hybrid-search  security: off     │
+                    │  all-MiniLM-L12 embeddings         │
+                    └────────┬──────────────────────────┘
+                             │
+           ┌─────────────────┼─────────────────────────────┐
+           ▼                 ▼                             ▼
+    ┌────────────┐   ┌────────────┐               ┌──────────────────┐
+    │ template-  │   │  model-    │               │    seed-job      │
+    │ job        │   │  job       │               │  30 articles     │
+    │ index      │   │  ML model  │               │                  │
+    │ template   │   │  pipelines │               │                  │
+    └────────────┘   └────────────┘               └──────────────────┘
 ```
 
 Four init Jobs run in sequence:
@@ -47,17 +51,17 @@ Four init Jobs run in sequence:
 | **Full Text** | `multi_match` on `title` + `body` | OpenSearch |
 | **Semantic** | `neural` on `body` (semantic field) | OpenSearch |
 | **Hybrid** | `hybrid` query (neural + multi_match) | OpenSearch + z-score pipeline |
-| **RAG** | Hybrid search + LLM generation | OpenSearch + Pydantic AI + Ollama |
+| **RAG** | Hybrid search + LLM generation | OpenSearch + Pydantic AI + llama-cpp-python |
 
 ### RAG Flow
 
-1. User enters a question in search bar (RAG mode)
-2. Frontend sends `POST /api/rag/query { question, top_k: 5 }` to the RAG API
-3. Pydantic AI agent calls the `opensearch_search` tool → hybrid search on OpenSearch
-4. Top-5 article chunks are returned with scores
-5. Agent sends chunks + question to Ollama (local LLM) for answer generation
-6. Structured response: `{ answer, sources: [{ id, title, excerpt, score }] }`
-7. Frontend renders the answer with cited source cards
+1. User enters a question in the chat UI
+2. Frontend sends `POST /api/rag/chat/stream { message }` (SSE)
+3. API runs hybrid search on OpenSearch (`neural` + `multi_match`)
+4. Top-5 article chunks are injected into the prompt as context
+5. Prompt is sent to the in-container **llama-cpp-python** server (Qwen2.5-1.5B GGUF)
+6. Model generates an answer token-by-token, streamed back as SSE `delta` events
+7. Frontend renders text incrementally, appends source cards on completion
 
 ### Hybrid Scoring
 
@@ -111,10 +115,7 @@ OpenSearch's `hybrid` query runs both sub-queries independently, then the **`hyb
 - [Skaffold](https://skaffold.dev)
 - [Helm](https://helm.sh)
 - [just](https://github.com/casey/just) (optional)
-- [Ollama](https://ollama.ai) running on the host with at least one model pulled
-  ```sh
-  ollama pull gemma4:12b-mlx
-  ```
+- No external LLM required — the GGUF model (~1 GB) is downloaded at Docker build time
 
 ### Helm Dependencies
 
@@ -124,17 +125,15 @@ just rebuild
 
 Downloads the `opensearch` and `opensearch-dashboards` chart dependencies.
 
-### Configure Ollama URL
+### Configure Model
 
-Set the correct `OLLAMA_URL` in `charts/rag-api/values.yaml` for your platform:
+The GGUF model is baked into the Docker image. To switch models, update `api/Dockerfile` with a new download URL and update `LLM_MODEL` in `charts/rag-api/values.yaml`:
 
 ```yaml
 env:
-  OLLAMA_URL: http://host.docker.internal:11434  # Colima / Docker Desktop (default)
-  LLM_MODEL: gemma4:12b-mlx                      # model pulled on your host
+  LLM_URL: http://127.0.0.1:8001/v1
+  LLM_MODEL: qwen2.5-1.5b-instruct
 ```
-
-Check with: `just ollama-url`
 
 ## Deploy
 
@@ -177,9 +176,15 @@ Open http://localhost:8080, select **RAG** mode, and ask a question like:
 ### Direct API
 
 ```sh
-curl -s http://localhost:8000/api/rag/query \
+# Stream (SSE)
+curl -s http://localhost:8000/api/rag/chat/stream \
   -H 'Content-Type: application/json' \
-  -d '{"question": "What is quantum computing?", "top_k": 3}' | jq .
+  -d '{"message": "What is quantum computing?"}'
+
+# Non-streaming
+curl -s http://localhost:8000/api/rag/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "What is quantum computing?"}' | jq .
 ```
 
 ## Key OpenSearch Features Used

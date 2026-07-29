@@ -23,7 +23,7 @@ spec:
           env:
             - name: OPENSEARCH_URL
               value: {{ .Values.env.OPENSEARCH_URL }}
-            - name: OLLAMA_URL
-              value: {{ .Values.env.OLLAMA_URL }}
+            - name: LLM_URL
+              value: {{ .Values.env.LLM_URL }}
             - name: LLM_MODEL
               value: {{ .Values.env.LLM_MODEL }}

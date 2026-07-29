@@ -1,11 +1,11 @@
-import re
+import json
 import uuid
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelRequest, ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.ollama import OllamaProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from . import settings
 from .models import ChatRequest, ChatResponse, QueryRequest, RAGResponse, Source
@@ -13,21 +13,14 @@ from .search import search_hybrid
 
 app = FastAPI(title="RAG API")
 
-SYSTEM_PROMPT = """You are a helpful RAG (Retrieval-Augmented Generation) assistant engaging in conversation.
-
-Always use the `opensearch_search` tool to find relevant articles before answering every user message — including follow-ups like "tell me more" or "elaborate". Search for the most relevant information each time.
-
-When answering:
-- Reference article titles as sources
-- Be concise but thorough
-- Maintain a conversational tone
-- If search results don't contain enough information, say so clearly
-
-You can reference previous parts of the conversation for context."""
+SYSTEM_PROMPT = """You are a helpful RAG assistant. Answer the user's question conversationally based on the context provided in the user's message. Reference article titles as sources. Be concise but thorough. Maintain a conversational tone. If the context doesn't contain enough information, say so clearly."""
 
 model = OpenAIChatModel(
     settings.LLM_MODEL,
-    provider=OllamaProvider(base_url=settings.OLLAMA_URL),
+    provider=OpenAIProvider(
+        base_url=settings.LLM_URL,
+        api_key="not-needed",
+    ),
 )
 
 agent = Agent(
@@ -36,12 +29,11 @@ agent = Agent(
 )
 
 
-@agent.tool_plain
-def opensearch_search(query: str) -> str:
-    """Search the knowledge base for articles relevant to the user's question. Use specific, targeted search terms. Returns article titles, scores, and body excerpts."""
+def _search_and_format(query: str) -> tuple[str, list[Source]]:
     results = search_hybrid(query, top_k=5)
+    sources = []
     if not results:
-        return "No relevant articles found."
+        return "No relevant articles found for this query.", sources
 
     lines = []
     for r in results:
@@ -49,27 +41,50 @@ def opensearch_search(query: str) -> str:
         lines.append(f"[Article {r['id']}: {r['title']}] (score: {r['score']:.3f})")
         lines.append(excerpt)
         lines.append("")
-    return "\n".join(lines)
+        sources.append(Source(
+            id=r["id"],
+            title=r["title"],
+            excerpt=excerpt,
+            score=r["score"],
+        ))
+    return "\n".join(lines), sources
 
 
-def _extract_sources_from_history(messages: list) -> list[Source]:
-    sources = []
-    seen_ids = set()
-    for msg in reversed(messages):
-        if isinstance(msg, ModelRequest):
-            for part in msg.parts:
-                if isinstance(part, ToolReturnPart):
-                    content = part.content if isinstance(part.content, str) else str(part.content)
-                    for m in re.finditer(r'\[Article (\d+): ([^\]]+)\] \(score: ([\d.]+)\)', content):
-                        if m.group(1) not in seen_ids:
-                            seen_ids.add(m.group(1))
-                            sources.append(Source(id=m.group(1), title=m.group(2), excerpt="", score=float(m.group(3))))
-        if len(sources) >= 3:
-            break
-    return sources
+def _build_enriched(history: list[tuple[str, str]], context: str, message: str) -> str:
+    conversation = ""
+    for q, a in history:
+        conversation += f"User: {q}\nAssistant: {a}\n\n"
+    return f"{conversation}Retrieved articles:\n{context}\n\nUser question: {message}"
 
 
-_conversations: dict[str, list] = {}
+_conversations: dict[str, list[tuple[str, str]]] = {}
+
+
+@app.post("/api/rag/chat/stream")
+async def chat_stream(body: ChatRequest):
+    conversation_id = body.conversation_id or str(uuid.uuid4())
+    history = _conversations.get(conversation_id, [])
+
+    context, sources = _search_and_format(body.message)
+    enriched = _build_enriched(history, context, body.message)
+
+    async def event_stream():
+        nonlocal conversation_id
+        try:
+            yield f"data: {json.dumps({'type': 'sources', 'sources': [s.model_dump() for s in sources]})}\n\n"
+
+            full_text = ""
+            async with agent.run_stream(enriched) as result:
+                async for text in result.stream_text(delta=True):
+                    full_text += text
+                    yield f"data: {json.dumps({'type': 'delta', 'text': text})}\n\n"
+
+            _conversations[conversation_id] = (history + [(body.message, full_text)])[-5:]
+            yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/rag/chat")
@@ -77,9 +92,11 @@ async def chat(body: ChatRequest) -> ChatResponse:
     conversation_id = body.conversation_id or str(uuid.uuid4())
     history = _conversations.get(conversation_id, [])
     try:
-        result = await agent.run(body.message, message_history=history)
-        _conversations[conversation_id] = result.all_messages()
-        sources = _extract_sources_from_history(result.all_messages())
+        context, sources = _search_and_format(body.message)
+        enriched = _build_enriched(history, context, body.message)
+        result = await agent.run(enriched)
+        _conversations[conversation_id] = (history + [(body.message, result.output)])[-5:]
+
         return ChatResponse(
             reply=result.output,
             sources=sources,
@@ -92,8 +109,9 @@ async def chat(body: ChatRequest) -> ChatResponse:
 @app.post("/api/rag/query")
 async def query(body: QueryRequest) -> RAGResponse:
     try:
-        result = await agent.run(body.question)
-        sources = _extract_sources_from_history(result.all_messages())
+        context, sources = _search_and_format(body.question)
+        enriched = f"Retrieved articles:\n{context}\n\nUser question: {body.question}"
+        result = await agent.run(enriched)
         return RAGResponse(
             answer=result.output,
             sources=sources,
