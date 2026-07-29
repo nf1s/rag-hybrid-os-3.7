@@ -12,7 +12,7 @@ The app is deployed to Kubernetes via **Skaffold + Helm**. Four components run i
 
 ```
 api/                  # Python RAG API (FastAPI + Pydantic AI agent)
-  app/main.py         # FastAPI app, agent (with @agent.tool_plain), chat/query endpoints
+  app/main.py         # FastAPI app, agent, chat/query/stream endpoints
   app/models.py       # Pydantic request/response models (ChatRequest, ChatResponse, Source, ...)
   app/settings.py     # Env-driven settings (OPENSEARCH_URL, LLM_URL, LLM_MODEL)
   start.sh            # Starts llama-cpp-python server (bg), then uvicorn
@@ -78,8 +78,8 @@ just reseed          # delete seed-job then skaffold run (re-seeds data)
 ```sh
 just curl-rag        # GET /api/rag/health
 just curl            # GET OpenSearch root
-curl -s http://localhost:8000/api/rag/chat -H 'Content-Type: application/json' \
-  -d '{"message": "What is quantum computing?"}' | jq .
+curl -s http://localhost:8000/api/rag/chat/stream -H 'Content-Type: application/json' \
+  -d '{"message": "What is quantum computing?"}'
 ```
 
 ## Testing / Linting
@@ -102,7 +102,7 @@ The RAG API reads three env vars (see `api/app/settings.py` and `charts/rag-api/
 |----------|---------|-------|
 | `OPENSEARCH_URL` | `http://hybrid-search-single:9200` | in-cluster OpenSearch service |
 | `LLM_URL` | `http://127.0.0.1:8001/v1` | llama-cpp-python server in same container |
-| `LLM_MODEL` | `smollm2-135m` | model name sent to the inference server |
+| `LLM_MODEL` | `qwen2.5-1.5b-instruct` | model name sent to the inference server |
 
 Override via `charts/rag-api/values.yaml` and redeploy with `just rag-restart` (or `just deploy`).
 
