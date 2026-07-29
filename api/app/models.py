@@ -6,6 +6,11 @@ class QueryRequest(BaseModel):
     top_k: int = 5
 
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+
+
 class Source(BaseModel):
     id: str
     title: str
@@ -16,3 +21,9 @@ class Source(BaseModel):
 class RAGResponse(BaseModel):
     answer: str
     sources: list[Source]
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: list[Source]
+    conversation_id: str

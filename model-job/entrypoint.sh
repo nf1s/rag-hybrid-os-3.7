@@ -27,9 +27,12 @@ MODEL_NAME="huggingface/sentence-transformers/all-MiniLM-L12-v2"
 
 MODEL_REGISTERED_NOW=false
 
+model_state() {
+  curl -s "$ES_URL/_plugins/_ml/models/$1" | jq -r '.model_state // "NOT_FOUND"'
+}
+
 ensure_model_deployed() {
   while true; do
-    # Find any existing model with this name, regardless of state
     SEARCH=$(curl -s -XPOST "$ES_URL/_plugins/_ml/models/_search" \
       -H 'Content-Type: application/json' \
       -d "{
@@ -39,20 +42,39 @@ ensure_model_deployed() {
         \"size\": 1,
         \"sort\": [{\"model_version\": \"desc\"}]
       }")
-    MODEL_ID=$(echo "$SEARCH" | jq -r '.hits.hits[0]._id // empty')
-    MODEL_STATE=$(echo "$SEARCH" | jq -r '.hits.hits[0]._source.model_state // empty')
+    MODEL_ID=$(echo "$SEARCH" | jq -r '.hits.hits[0]._source.model_id // empty')
 
     if [ -n "$MODEL_ID" ]; then
-      echo "Found existing model: $MODEL_ID (state=$MODEL_STATE)"
-      case "$MODEL_STATE" in
+      STATE=$(model_state "$MODEL_ID")
+      echo "Found existing model: $MODEL_ID (state=$STATE)"
+      case "$STATE" in
         "DEPLOYED")
           echo "Model already deployed."
           return 0 ;;
         "UNDEPLOYED" | "DEPLOY_FAILED")
           echo "Redeploying model..."
-          curl -s -XPOST "$ES_URL/_plugins/_ml/models/$MODEL_ID/_deploy" | jq .
-          for i in $(seq 1 60); do
-            STATE=$(curl -s "$ES_URL/_plugins/_ml/models/$MODEL_ID" | jq -r '.model_state // "NOT_FOUND"')
+          DEPLOY_RESP=$(curl -s -XPOST "$ES_URL/_plugins/_ml/models/$MODEL_ID/_deploy")
+          TASK_ID=$(echo "$DEPLOY_RESP" | jq -r '.task_id // empty')
+          echo "$DEPLOY_RESP" | jq .
+          if [ -n "$TASK_ID" ]; then
+            echo "Deploy task: $TASK_ID. Waiting for task to complete..."
+            while true; do
+              TASK_RESP=$(curl -s "$ES_URL/_plugins/_ml/tasks/$TASK_ID")
+              STATE=$(echo "$TASK_RESP" | jq -r '.state // "UNKNOWN"')
+              echo "  Task state: $STATE"
+              case "$STATE" in
+                "COMPLETED") break ;;
+                "FAILED")
+                  echo "  Deploy failed: $(echo "$TASK_RESP" | jq '.error // "unknown"')"
+                  sleep 5
+                  continue 2 ;;
+                *) sleep 10 ;;
+              esac
+            done
+          fi
+          # Second: wait for model to report deployed
+          for i in $(seq 1 12); do
+            STATE=$(model_state "$MODEL_ID")
             case "$STATE" in
               "DEPLOYED")
                 echo "Model deployed."
@@ -61,16 +83,16 @@ ensure_model_deployed() {
                 echo "  Deploy failed. Retrying..."
                 sleep 5
                 continue 2 ;;
-              *) sleep 10 ;;
+              *) sleep 5 ;;
             esac
           done
           echo "  Deployment timed out. Retrying..."
           sleep 5
           continue ;;
         "DEPLOYING" | "CREATED")
-          echo "Model is $MODEL_STATE. Waiting..."
+          echo "Model is $STATE. Waiting..."
           for i in $(seq 1 60); do
-            STATE=$(curl -s "$ES_URL/_plugins/_ml/models/$MODEL_ID" | jq -r '.model_state // "NOT_FOUND"')
+            STATE=$(model_state "$MODEL_ID")
             case "$STATE" in
               "DEPLOYED")
                 echo "Model deployed."
@@ -127,8 +149,7 @@ ensure_model_deployed() {
     echo "Task complete. Model ID: $MODEL_ID"
     echo "Waiting for model deployment..."
     for i in $(seq 1 60); do
-      MODEL_RESP=$(curl -s "$ES_URL/_plugins/_ml/models/$MODEL_ID")
-      STATE=$(echo "$MODEL_RESP" | jq -r '.model_state // "NOT_FOUND"')
+      STATE=$(model_state "$MODEL_ID")
       case "$STATE" in
         "DEPLOYED")
           echo "Model deployed."
