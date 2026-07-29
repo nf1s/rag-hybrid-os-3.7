@@ -29,23 +29,63 @@ MODEL_REGISTERED_NOW=false
 
 ensure_model_deployed() {
   while true; do
+    # Find any existing model with this name, regardless of state
     SEARCH=$(curl -s -XPOST "$ES_URL/_plugins/_ml/models/_search" \
       -H 'Content-Type: application/json' \
       -d "{
         \"query\": {
-          \"bool\": {
-            \"must\": [
-              {\"match\": {\"name\": \"$MODEL_NAME\"}},
-              {\"term\": {\"model_state\": \"DEPLOYED\"}}
-            ]
-          }
-        }
+          \"match\": {\"name\": \"$MODEL_NAME\"}
+        },
+        \"size\": 1,
+        \"sort\": [{\"model_version\": \"desc\"}]
       }")
     MODEL_ID=$(echo "$SEARCH" | jq -r '.hits.hits[0]._id // empty')
+    MODEL_STATE=$(echo "$SEARCH" | jq -r '.hits.hits[0]._source.model_state // empty')
 
     if [ -n "$MODEL_ID" ]; then
-      echo "Model already deployed with ID: $MODEL_ID"
-      return 0
+      echo "Found existing model: $MODEL_ID (state=$MODEL_STATE)"
+      case "$MODEL_STATE" in
+        "DEPLOYED")
+          echo "Model already deployed."
+          return 0 ;;
+        "UNDEPLOYED" | "DEPLOY_FAILED")
+          echo "Redeploying model..."
+          curl -s -XPOST "$ES_URL/_plugins/_ml/models/$MODEL_ID/_deploy" | jq .
+          for i in $(seq 1 60); do
+            STATE=$(curl -s "$ES_URL/_plugins/_ml/models/$MODEL_ID" | jq -r '.model_state // "NOT_FOUND"')
+            case "$STATE" in
+              "DEPLOYED")
+                echo "Model deployed."
+                return 0 ;;
+              "DEPLOY_FAILED")
+                echo "  Deploy failed. Retrying..."
+                sleep 5
+                continue 2 ;;
+              *) sleep 10 ;;
+            esac
+          done
+          echo "  Deployment timed out. Retrying..."
+          sleep 5
+          continue ;;
+        "DEPLOYING" | "CREATED")
+          echo "Model is $MODEL_STATE. Waiting..."
+          for i in $(seq 1 60); do
+            STATE=$(curl -s "$ES_URL/_plugins/_ml/models/$MODEL_ID" | jq -r '.model_state // "NOT_FOUND"')
+            case "$STATE" in
+              "DEPLOYED")
+                echo "Model deployed."
+                return 0 ;;
+              "DEPLOY_FAILED")
+                echo "  Deploy failed. Retrying..."
+                sleep 5
+                continue 2 ;;
+              *) sleep 10 ;;
+            esac
+          done
+          echo "  Wait timed out. Retrying..."
+          sleep 5
+          continue ;;
+      esac
     fi
 
     MODEL_REGISTERED_NOW=true
