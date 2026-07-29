@@ -1,8 +1,9 @@
+import re
 import uuid
 
 from fastapi import FastAPI, HTTPException
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai.messages import ModelRequest, ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
@@ -32,7 +33,6 @@ model = OpenAIChatModel(
 agent = Agent(
     model,
     system_prompt=SYSTEM_PROMPT,
-    output_type=RAGResponse,
 )
 
 
@@ -52,7 +52,24 @@ def opensearch_search(query: str) -> str:
     return "\n".join(lines)
 
 
-_conversations: dict[str, list[ModelMessage]] = {}
+def _extract_sources_from_history(messages: list) -> list[Source]:
+    sources = []
+    seen_ids = set()
+    for msg in reversed(messages):
+        if isinstance(msg, ModelRequest):
+            for part in msg.parts:
+                if isinstance(part, ToolReturnPart):
+                    content = part.content if isinstance(part.content, str) else str(part.content)
+                    for m in re.finditer(r'\[Article (\d+): ([^\]]+)\] \(score: ([\d.]+)\)', content):
+                        if m.group(1) not in seen_ids:
+                            seen_ids.add(m.group(1))
+                            sources.append(Source(id=m.group(1), title=m.group(2), excerpt="", score=float(m.group(3))))
+        if len(sources) >= 3:
+            break
+    return sources
+
+
+_conversations: dict[str, list] = {}
 
 
 @app.post("/api/rag/chat")
@@ -60,11 +77,12 @@ async def chat(body: ChatRequest) -> ChatResponse:
     conversation_id = body.conversation_id or str(uuid.uuid4())
     history = _conversations.get(conversation_id, [])
     try:
-        result = await agent.run(body.message, message_history=history, output_type=RAGResponse)
+        result = await agent.run(body.message, message_history=history)
         _conversations[conversation_id] = result.all_messages()
+        sources = _extract_sources_from_history(result.all_messages())
         return ChatResponse(
-            reply=result.output.answer,
-            sources=result.output.sources,
+            reply=result.output,
+            sources=sources,
             conversation_id=conversation_id,
         )
     except Exception as e:
@@ -74,8 +92,12 @@ async def chat(body: ChatRequest) -> ChatResponse:
 @app.post("/api/rag/query")
 async def query(body: QueryRequest) -> RAGResponse:
     try:
-        result = await agent.run(body.question, output_type=RAGResponse)
-        return result.output
+        result = await agent.run(body.question)
+        sources = _extract_sources_from_history(result.all_messages())
+        return RAGResponse(
+            answer=result.output,
+            sources=sources,
+        )
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
