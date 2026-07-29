@@ -71,6 +71,12 @@ OpenSearch's `hybrid` query runs both sub-queries independently, then the **`hyb
 - **Combination:** `arithmetic_mean` with weights `[0.59, 0.41]`
 - Result: a single, deduplicated set of hits with combined scores
 
+## UI
+
+![RAG Chat UI](screenshot.png)
+
+Single-page chat interface with four search modes (Full Text, Semantic, Hybrid, RAG). Type a question, select a mode, and results stream in as the model generates its answer. Source cards appear below each response showing the retrieved article chunks with relevance scores.
+
 ## Project Structure
 
 ```
