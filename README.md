@@ -113,7 +113,7 @@ OpenSearch's `hybrid` query runs both sub-queries independently, then the **`hyb
 - [just](https://github.com/casey/just) (optional)
 - [Ollama](https://ollama.ai) running on the host with at least one model pulled
   ```sh
-  ollama pull llama3.2
+  ollama pull gemma4:12b-mlx
   ```
 
 ### Helm Dependencies
@@ -130,9 +130,8 @@ Set the correct `OLLAMA_URL` in `charts/rag-api/values.yaml` for your platform:
 
 ```yaml
 env:
-  OLLAMA_URL: http://host.docker.internal:11434  # macOS Docker Desktop
-  # OLLAMA_URL: http://localhost:11434            # Linux (hostNetwork)
-  # OLLAMA_URL: http://192.168.x.x:11434          # Minikube/kind node IP
+  OLLAMA_URL: http://host.docker.internal:11434  # Colima / Docker Desktop (default)
+  LLM_MODEL: gemma4:12b-mlx                      # model pulled on your host
 ```
 
 Check with: `just ollama-url`

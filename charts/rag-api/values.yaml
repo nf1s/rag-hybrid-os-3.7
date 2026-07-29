@@ -9,4 +9,4 @@ service:
 env:
   OPENSEARCH_URL: http://hybrid-search-single:9200
   OLLAMA_URL: http://host.docker.internal:11434
-  LLM_MODEL: llama3.2
+  LLM_MODEL: gemma4:12b-mlx

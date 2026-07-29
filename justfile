@@ -68,7 +68,5 @@ rebuild:
     helm dependency update charts/hybrid-search/
 
 ollama-url:
-    @echo "Set OLLAMA_URL in charts/rag-api/values.yaml to your host's Ollama endpoint."
-    @echo "  macOS Docker Desktop: http://host.docker.internal:11434"
-    @echo "  Linux (hostNetwork):  http://localhost:11434"
-    @echo "  Minikube:            $(minikube ip):11434"
+    @echo "Ollama is reachable from K8s at: http://host.docker.internal:11434 (Colima/Docker Desktop)"
+    @echo "Model: gemma4:12b-mlx"
