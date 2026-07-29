@@ -22,6 +22,9 @@ port-forward-dashboards:
 port-forward-ui:
     kubectl port-forward -n opensearch svc/ui 8080:80
 
+port-forward-rag:
+    kubectl port-forward -n opensearch svc/rag-api 8000:8000
+
 seed:
     skaffold run
 
@@ -38,6 +41,16 @@ template-logs:
 model-logs:
     kubectl logs -n opensearch job/model-job
 
+rag-logs:
+    kubectl logs -n opensearch deployment/rag-api -f
+
+rag-restart:
+    kubectl rollout restart -n opensearch deployment/rag-api
+
+all-logs:
+    kubectl logs -n opensearch deployment/rag-api -f &
+    kubectl logs -n opensearch deployment/ui -f
+
 ps:
     kubectl get pods -n opensearch
 
@@ -47,6 +60,15 @@ svc:
 curl:
     curl -s http://localhost:9200 | python3 -m json.tool
 
+curl-rag:
+    curl -s http://localhost:8000/api/rag/health | python3 -m json.tool
+
 rebuild:
     rm -rf charts/hybrid-search/charts charts/hybrid-search/Chart.lock
     helm dependency update charts/hybrid-search/
+
+ollama-url:
+    @echo "Set OLLAMA_URL in charts/rag-api/values.yaml to your host's Ollama endpoint."
+    @echo "  macOS Docker Desktop: http://host.docker.internal:11434"
+    @echo "  Linux (hostNetwork):  http://localhost:11434"
+    @echo "  Minikube:            $(minikube ip):11434"
