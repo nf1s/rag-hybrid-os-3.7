@@ -85,6 +85,40 @@
     return d.innerHTML;
   }
 
+  function markdownToHtml(text) {
+    let html = escHtml(text);
+    html = html.replace(/&gt;/g, '>');
+    html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    const lines = html.split('\n');
+    let inList = false;
+    const result = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const listMatch = line.match(/^(\s*)[-*+]\s+(.*)/);
+      if (listMatch) {
+        if (!inList) { result.push('<ul>'); inList = true; }
+        result.push('<li>' + listMatch[2] + '</li>');
+        continue;
+      }
+      if (inList) { result.push('</ul>'); inList = false; }
+      const headerMatch = line.match(/^(#{1,3})\s+(.*)/);
+      if (headerMatch) {
+        result.push(`<h${headerMatch[1].length}>${headerMatch[2]}</h${headerMatch[1].length}>`);
+        continue;
+      }
+      if (line.trim() === '') {
+        result.push('');
+        continue;
+      }
+      result.push('<p>' + line + '</p>');
+    }
+    if (inList) result.push('</ul>');
+    return result.join('\n');
+  }
+
   function showError(msg) {
     errorEl.textContent = msg;
     errorEl.style.display = 'block';
@@ -102,9 +136,9 @@
     div.className = 'msg ' + role;
 
     if (role === 'bot') {
-      const p = document.createElement('p');
-      p.innerHTML = escHtml(text).replace(/\n/g, '<br>');
-      div.appendChild(p);
+      const container = document.createElement('div');
+      container.innerHTML = markdownToHtml(text);
+      div.appendChild(container);
 
       if (sources && sources.length > 0) {
         const toggle = document.createElement('div');
