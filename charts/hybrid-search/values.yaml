@@ -1,0 +1,36 @@
+opensearch:
+  clusterName: "hybrid-search"
+  nodeGroup: "single"
+  singleNode: true
+  replicas: 1
+  majorVersion: "3"
+  securityConfig:
+    enabled: false
+  config:
+    opensearch.yml: |
+      cluster.name: hybrid-search
+      network.host: 0.0.0.0
+      discovery.type: single-node
+      plugins.security.disabled: true
+      plugins.security.ssl.http.enabled: false
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  opensearchJavaOpts: "-Xmx2g -Xms2g"
+  service:
+    type: ClusterIP
+opensearch-dashboards:
+  opensearchHosts: "http://hybrid-search-single:9200"
+  replicaCount: 1
+  service:
+    type: ClusterIP
+  extraEnvs:
+    - name: DISABLE_SECURITY_DASHBOARDS_PLUGIN
+      value: "true"

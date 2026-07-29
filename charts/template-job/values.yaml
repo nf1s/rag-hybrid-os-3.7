@@ -1,0 +1,7 @@
+name: template-job
+namespace: opensearch
+image:
+  repository: hybrid-search-template
+  tag: latest
+esUrl: http://hybrid-search-single:9200
+backoffLimit: 3

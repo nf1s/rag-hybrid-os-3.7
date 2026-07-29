@@ -1,0 +1,5 @@
+apiVersion: v2
+name: template-job
+description: One-shot Job to apply the article index template to OpenSearch
+type: application
+version: 0.1.0

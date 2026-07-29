@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: model-job
+spec:
+  backoffLimit: {{ .Values.backoffLimit }}
+  template:
+    spec:
+      containers:
+        - name: model
+          image: hybrid-search-model
+          env:
+            - name: ES_URL
+              value: {{ .Values.esUrl }}
+      restartPolicy: Never

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: seed-job
+description: One-shot Job to seed OpenSearch with sample article data
+type: application
+version: 0.1.0

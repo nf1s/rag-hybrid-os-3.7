@@ -1,0 +1,13 @@
+apiVersion: v2
+name: hybrid-search
+description: A Helm chart for OpenSearch on Colima
+type: application
+version: 0.1.0
+appVersion: "3.7.0"
+dependencies:
+  - name: opensearch
+    version: 3.7.0
+    repository: https://opensearch-project.github.io/helm-charts
+  - name: opensearch-dashboards
+    version: 3.7.0
+    repository: https://opensearch-project.github.io/helm-charts

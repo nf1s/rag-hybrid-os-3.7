@@ -1,0 +1,17 @@
+{
+  "index_patterns": ["article"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "id": { "type": "keyword" },
+        "title": { "type": "text", "analyzer": "standard" },
+        "body": { "type": "text", "analyzer": "standard" }
+      }
+    }
+  },
+  "priority": 100
+}

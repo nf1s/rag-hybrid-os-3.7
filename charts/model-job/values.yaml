@@ -1,0 +1,7 @@
+name: model-job
+namespace: opensearch
+image:
+  repository: hybrid-search-model
+  tag: latest
+esUrl: http://hybrid-search-single:9200
+backoffLimit: 2

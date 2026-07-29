@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ui
+description: Search UI for OpenSearch
+type: application
+version: 0.1.0

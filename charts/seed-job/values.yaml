@@ -1,0 +1,7 @@
+name: seed-job
+namespace: opensearch
+image:
+  repository: hybrid-search-seed
+  tag: latest
+esUrl: http://hybrid-search-single:9200
+backoffLimit: 3

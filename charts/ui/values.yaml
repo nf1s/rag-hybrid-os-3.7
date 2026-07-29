@@ -1,0 +1,5 @@
+image: nginx:alpine
+replicaCount: 1
+namespace: opensearch
+service:
+  port: 80

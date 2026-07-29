@@ -1,0 +1,5 @@
+apiVersion: v2
+name: model-job
+description: One-shot Job to register a dense embedding model and apply semantic field mapping
+type: application
+version: 0.1.0
