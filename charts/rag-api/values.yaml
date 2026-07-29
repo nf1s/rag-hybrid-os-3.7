@@ -8,5 +8,5 @@ service:
   port: 8000
 env:
   OPENSEARCH_URL: http://hybrid-search-single:9200
-  OLLAMA_URL: http://host.docker.internal:11434/v1
-  LLM_MODEL: gemma4:12b-mlx
+  LLM_URL: http://127.0.0.1:8001/v1
+  LLM_MODEL: qwen2.5-1.5b-instruct

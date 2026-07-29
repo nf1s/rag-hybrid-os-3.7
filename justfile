@@ -67,6 +67,3 @@ rebuild:
     rm -rf charts/hybrid-search/charts charts/hybrid-search/Chart.lock
     helm dependency update charts/hybrid-search/
 
-ollama-url:
-    @echo "Ollama is reachable from K8s at: http://host.docker.internal:11434 (Colima/Docker Desktop)"
-    @echo "Model: gemma4:12b-mlx"
