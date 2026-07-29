@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic_ai import Agent
-from pydantic_ai.models.ollama import OllamaModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.ollama import OllamaProvider
 
 from . import settings
 from .models import QueryRequest, RAGResponse, Source
@@ -15,22 +16,22 @@ When answering, cite your sources by referencing the article titles.
 If the search results don't contain enough information to answer the question,
 say so clearly. Base your answer on the retrieved articles, not on general knowledge."""
 
-ollama_model = OllamaModel(
-    model_name=settings.LLM_MODEL,
-    base_url=settings.OLLAMA_URL,
+model = OpenAIChatModel(
+    settings.LLM_MODEL,
+    provider=OllamaProvider(base_url=settings.OLLAMA_URL),
 )
 
 agent = Agent(
-    ollama_model,
+    model,
     system_prompt=SYSTEM_PROMPT,
-    result_type=RAGResponse,
+    output_type=RAGResponse,
 )
 
 
 @agent.tool_plain
-def opensearch_search(query: str, top_k: int = 5) -> str:
+def opensearch_search(query: str) -> str:
     """Search the article database for relevant information. Returns article excerpts."""
-    results = search_hybrid(query, top_k=top_k)
+    results = search_hybrid(query, top_k=5)
     if not results:
         return "No relevant articles found."
 
@@ -46,7 +47,7 @@ def opensearch_search(query: str, top_k: int = 5) -> str:
 @app.post("/api/rag/query")
 async def query(body: QueryRequest) -> RAGResponse:
     try:
-        result = await agent.run(body.question, result_type=RAGResponse)
+        result = await agent.run(body.question, output_type=RAGResponse)
         return result.data
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
