@@ -19,11 +19,11 @@ opensearch:
   resources:
     requests:
       cpu: "500m"
-      memory: "2Gi"
+      memory: "4Gi"
     limits:
       cpu: "2000m"
-      memory: "4Gi"
-  opensearchJavaOpts: "-Xmx2g -Xms2g"
+      memory: "6Gi"
+  opensearchJavaOpts: "-Xmx3g -Xms3g"
   service:
     type: ClusterIP
 opensearch-dashboards:
