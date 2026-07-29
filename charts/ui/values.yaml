@@ -1,5 +1,8 @@
-image: nginx:alpine
+name: ui
 replicaCount: 1
 namespace: opensearch
+image:
+  repository: hybrid-search-ui
+  tag: latest
 service:
   port: 80

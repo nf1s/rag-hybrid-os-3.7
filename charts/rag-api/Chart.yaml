@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rag-api
+description: RAG API service with Pydantic AI agent and Ollama
+type: application
+version: 0.1.0

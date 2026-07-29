@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: rag-api
+  template:
+    metadata:
+      labels:
+        app: rag-api
+    spec:
+      containers:
+        - name: rag-api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          env:
+            - name: OPENSEARCH_URL
+              value: {{ .Values.env.OPENSEARCH_URL }}
+            - name: OLLAMA_URL
+              value: {{ .Values.env.OLLAMA_URL }}
+            - name: LLM_MODEL
+              value: {{ .Values.env.LLM_MODEL }}

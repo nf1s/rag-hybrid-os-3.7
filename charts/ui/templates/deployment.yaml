@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ui
+  name: {{ .Values.name }}
   namespace: {{ .Values.namespace }}
   labels:
-    app: ui
+    app: {{ .Values.name }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: hybrid-search-ui
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           ports:
             - containerPort: 80
