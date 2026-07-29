@@ -48,7 +48,7 @@ def opensearch_search(query: str) -> str:
 async def query(body: QueryRequest) -> RAGResponse:
     try:
         result = await agent.run(body.question, output_type=RAGResponse)
-        return result.data
+        return result.output
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
