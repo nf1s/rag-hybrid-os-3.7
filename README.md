@@ -76,7 +76,8 @@ OpenSearch's `hybrid` query runs both sub-queries independently, then the **`hyb
 ```
 ├── api/                        # Python RAG API service
 │   ├── Dockerfile
-│   ├── requirements.txt
+│   ├── pyproject.toml
+│   ├── uv.lock
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py             # FastAPI + Pydantic AI agent
