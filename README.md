@@ -12,17 +12,17 @@ Retrieval-Augmented Generation on top of **OpenSearch 3.7** hybrid search (seman
                              │ /api/rag/ → RAG API
                     ┌────────▼──────────────────────────┐
                     │  RAG API (Pydantic AI agent)      │
-                    │  FastAPI  :8000                    │
+                    │  FastAPI  :8000                   │
                     │  ┌─────────────────────────────┐  │
-                    │  │ llama-cpp-python (bg proc)   │  │
+                    │  │ llama-cpp-python (bg proc)  │  │
                     │  │ Qwen2.5-1.5B GGUF :8001     │  │
                     │  └─────────────────────────────┘  │
                     └────────┬──────────────────────────┘
                              │ hybrid search
                     ┌────────▼──────────────────────────┐
-                    │  OpenSearch 3.7                    │
+                    │  OpenSearch 3.7                   │
                     │  hybrid-search  security: off     │
-                    │  all-MiniLM-L12 embeddings         │
+                    │  all-MiniLM-L12 embeddings        │
                     └────────┬──────────────────────────┘
                              │
            ┌─────────────────┼─────────────────────────────┐
